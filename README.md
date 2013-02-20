@@ -5,7 +5,7 @@ Feedburner to Twitter
 
 Requires tmhOAuth: https://github.com/themattharris/tmhOAuth
 
-This script will tweet from a Feedburner feed. Just enter the required Feedburner feed URL, your bitly keys, and your twitter keys. It checks to make sure that the post's URL doesn't already exist in bitly. If it does, then it tweets based on the post's title and URL and will create two hash tags based on the tags of the post.
+This script will tweet from a Feedburner feed. Just enter the required Feedburner feed URL, your bitly keys, and your twitter keys. It checks to make sure that the post's URL doesn't already exist in bitly. If it doesn't already exist, then it tweets based on the post's title and URL and will create two hash tags based on the tags of the post.
 
 Copyright (c) 2013, Jeff Steinport
 
