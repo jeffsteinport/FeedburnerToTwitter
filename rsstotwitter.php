@@ -12,95 +12,120 @@ http://opensource.org/licenses/BSD-2-Clause
 include 'tmhOAuth-master/tmhOAuth.php';
 include 'tmhOAuth-master/tmhUtilities.php';
 
-$feed = 'http://feeds.feedburner.com/FEED_NAME_HERE?format=xml';
+$newurls = array();
+$feed = 'http://feeds.feedburner.com/FeedNameHere?format=xml';
 $feed_to_array = (array) new SimpleXmlElement(file_get_contents($feed),LIBXML_NOCDATA);
+
+//array of html entities that php's html_entity_decode doesn't replace
+$replacements = array(
+    '&ndash;' => '-',
+    '&rsquo;' => '\'',
+);
+
+//the file we're saving bitly URLs to for a history of posts to avoid duplication of tweets
+$filename = "urls.txt";
+$urls = json_decode(file_get_contents($filename));
+echo "<pre>";
+print_r($urls);
 
 foreach($feed_to_array as $post) {
         foreach($post as $post2) {
-                if ($post2->link){
-                        $tag = "";
+		if ($post2->link){ //make sure we're grabbing a post and not other feed data
+			$tag = "";
 
-                        foreach($post2->category as $category) {
-                                $tag[] = $category;
-                        }
+			foreach($post2->category as $category) { //create an array of the tags assigned to the post
+				$tag[] = $category;
+			}
 
-                        unset($tag[0]);
+			unset($tag[0]); //remove the generic tag that my wordpress site adds to all posts
 
-                        $arraynum = count($tag);
-                        $rand = mt_rand(1,$arraynum);
+			//randomly choose two tags to create hashtags
+			$arraynum = count($tag);
+			$rand = mt_rand(1,$arraynum);
+			$rand2 = mt_rand(1,$arraynum);
 
-                        $hashtag = str_replace(" ","",$tag[$rand]);
-                        $hashtag = "#$hashtag";
+			$hashtag = "#".str_replace(" ","",$tag[$rand]); //make sure there are no spaces in the hashtag
 
-                        $rand2 = mt_rand(1,$arraynum);
+			//make sure second tag isn't the same as the first
+			if ($rand2 = $rand) {
+				$rand2++;
+				if(!$tag[$rand2]) {
+					$hashtag .= " #GENERICHASHTAG"; //if it is the same, just add a generic hashtag
+				} else {
+					$hashtag2 = str_replace(" ","",$tag[$rand2]);
+		                        $hashtag .= " #$hashtag2"; //otherwise append second hashtag to first
+				}
+			}
 
-                        if ($rand2 = $rand) {
-                                $rand2++;
-                                if(!$tag[$rand2]) {
-                                        $hashtag .= " #GENERIC_HASH_TAG";
-                                } else {
-                                        $hashtag2 = str_replace(" ","",$tag[$rand2]);
-                                        $hashtag .= " #$hashtag2";
-                                }
-                        }
-
-                        $title = trim(htmlentities($post2->title, ENT_QUOTES, "UTF-8"));
-                        $title = substr($title,0,20)."... ";
-                        $shurl = $post2->link;
-                        $blink = trim(bitly_shorten($shurl));
-                        $chkurl = check_bitly($blink);
-                        if ($chkurl) {
-                                echo "exists!";
-                        } else {
-                                $desc = trim(substr(strip_tags($post2->description),0,strpos($post2->description,' ',75)))."...";
-                                $tweet = "$title $desc $blink $hashtag";
-                                tweet($tweet);
-                        }
-
-
-
-               }
-
-        }
-
+			$title = trim(htmlentities($post2->title, ENT_QUOTES, "UTF-8")); //get rid of the UTF-8 oddities from the title
+			$title = substr($title,0,20)."... "; //shorten the title to 20 characters
+			$shurl = $post2->link; //get the blog post's URL (a feedburner URL)
+			$blink = trim(bitly_shorten($shurl)); //turn into a bitly URL
+			$chkurl = check_bitly($blink); //see if we've already posted this URL to twitter
+			
+                        if ($chkurl == 1) {
+				echo "exists!<br>"; //if so, move on to next RSS feed entry
+			} else {
+				$desc = trim(substr(strip_tags($post2->description),0,strpos($post2->description,' ',75)))."..."; //trim the tweet's description after 75 characters to the closest word ending, add elipses
+				$tweet = "$title $desc $blink $hashtag"; //compose tweet
+				if(strlen($tweet) > 140) {
+					$tweet = "$title $desc $blink"; //if the tweet is more than 140 characters, remove the hashtags to shorten it
+				}
+				$tweet = html_entity_decode($tweet); //remove the html entities
+				$tweet = str_replace(array_keys($replacements), $replacements, $tweet); //remove the remaining html entities manually
+				tweet($tweet); //tweet it!
+				echo "Tweeted: $tweet<br>";
+				echo strlen($tweet)."<br>";
+			}
+		}
+	}
 }
 
-function bitly_shorten($url,$format='txt') {
-        $buser = "bitly_user_key";
-        $bapi = "bitly_api_key";
+//write our new array of bitly URLS to file; this will keep a short history of URLS from the feed so that we don't duplicate posts
+$fh = fopen($filename,"w+");
+print_r($newurls);
+$newurls = json_encode($newurls);
+fwrite($fh, $newurls);
+fclose($fh);
 
-        $connectURL = 'http://api.bit.ly/v3/shorten?login='.$buser.'&apiKey='.$bapi.'&uri='.urlencode($url).'&format='.$format;
-        return file_get_contents($connectURL);
+function bitly_shorten($url,$format='txt') {
+	$buser = "zzz";
+	$bapi = "zzz";
+
+	$connectURL = 'http://api.bit.ly/v3/shorten?login='.$buser.'&apiKey='.$bapi.'&uri='.urlencode($url).'&format='.$format;
+	return file_get_contents($connectURL);
 }
 
 function check_bitly($url) {
-        $curl = curl_init();
-        curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_HEADER, true);
-        curl_setopt($curl, CURLOPT_TIMEOUT, 10);
-        curl_setopt($curl, CURLOPT_NOBODY, true);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        $data = curl_exec($curl);
-        curl_close($curl);
-        preg_match("/HTTP\/1\.[1|0]\s(\d{3})/",$data,$matches);
-        return ($matches[1] == 301);
+	global $urls;
+	global $newurls;
+	if (in_array($url, $urls)) {
+		$newurls[] .= $url;
+		$chkurl = 1;
+		return $chkurl;
+	} else {
+		$newurls[] .= $url;
+		$chkurl = 0;
+		return $chkurl;
+	}
 }
 
-
 function tweet($tweet) {
-        $tmhOAuth = new tmhOAuth(array(
-                'consumer_key' => 'zzz',
-                'consumer_secret' => 'zzz',
-                'user_token' => 'zzz',
-                'user_secret' => 'zzz',
-        ));
+	//see tmhOAuth documentation
+	$tmhOAuth = new tmhOAuth(array(
+		'consumer_key' => 'zzz',
+		'consumer_secret' => 'zzz',
+		'user_token' => 'zzz',
+		'user_secret' => 'zzz',
+	));
 
-        $response = $tmhOAuth->request('POST', $tmhOAuth->url('1.1/statuses/update'), array('status' => $tweet));
+	$response = $tmhOAuth->request('POST', $tmhOAuth->url('1.1/statuses/update'), array('status' => $tweet));
 
-        if ($response != 200) {
-                //Do something if the request was unsuccessful
-                echo 'There was an error posting the message.';
-        }
+	if ($code == 200) {
+		tmhUtilities::pr(json_decode($tmhOAuth->response['response']));
+	} else {
+		tmhUtilities::pr($tmhOAuth->response['response']);
+	}
 }
 
 ?>
