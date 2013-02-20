@@ -1,4 +1,14 @@
 <?php
+/*
+Copyright (c) 2013, Jeff Steinport
+
+All rights reserved.
+
+Licensed under the BSD 2-Clause License:
+http://opensource.org/licenses/BSD-2-Clause
+*/
+
+//Requires tmhOAuth: https://github.com/themattharris/tmhOAuth
 include 'tmhOAuth-master/tmhOAuth.php';
 include 'tmhOAuth-master/tmhUtilities.php';
 
